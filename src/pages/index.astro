@@ -1,0 +1,320 @@
+---
+// src/pages/index.astro
+import Layout from '../layouts/Layout.astro';
+import ChatLog from '../components/ChatLog.astro';
+import MessageForm from '../components/MessageForm.astro';
+import WalletConnect from '../components/WalletConnect.astro';
+---
+
+<Layout title="UselessChat">
+  <div class="container mx-auto px-4 py-4 max-w-4xl">
+    <div class="win98-window">
+      <!-- Title Bar -->
+      <div class="win98-window-header flex justify-between items-center">
+        <span>🌸 UselessChat v2.0 - Eternal Blockchain Conversations</span>
+        <div class="flex space-x-1">
+          <button class="bg-gray-400 hover:bg-gray-500 text-white px-2 py-0 text-xs">_</button>
+          <button class="bg-gray-400 hover:bg-gray-500 text-white px-2 py-0 text-xs">□</button>
+          <button class="bg-red-500 hover:bg-red-600 text-white px-2 py-0 text-xs">×</button>
+        </div>
+      </div>
+      
+      <!-- Menu Bar -->
+      <div class="bg-gray-200 border-b border-gray-400 px-2 py-1 text-xs">
+        <span class="hover:bg-blue-200 px-2 py-1 cursor-pointer">File</span>
+        <span class="hover:bg-blue-200 px-2 py-1 cursor-pointer">Edit</span>
+        <span class="hover:bg-blue-200 px-2 py-1 cursor-pointer">View</span>
+        <span class="hover:bg-blue-200 px-2 py-1 cursor-pointer">Tools</span>
+        <span class="hover:bg-blue-200 px-2 py-1 cursor-pointer">Help</span>
+      </div>
+      
+      <!-- Status Bar -->
+      <div class="bg-gray-200 border-b border-gray-400 px-2 py-1 text-xs flex items-center space-x-4">
+        <span class="text-green-600">● Online</span>
+        <span>|</span>
+        <WalletConnect />
+        <span>|</span>
+        <span class="text-gray-600">Ready</span>
+      </div>
+      
+      <!-- Main Chat Area -->
+      <div class="p-2 space-y-2">
+        <ChatLog />
+        <MessageForm />
+      </div>
+      
+      <!-- Status Bar Bottom -->
+      <div class="bg-gray-200 border-t border-gray-400 px-2 py-1 text-xs flex justify-between items-center">
+        <span>Messages stored permanently on blockchain 🚀</span>
+        <span class="text-gray-600">v2.0.0</span>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  // Import ethers and Web3Modal
+  import { ethers } from 'ethers';
+  import { createWeb3Modal, defaultConfig } from '@web3modal/ethers';
+  /* TODO: replace walletconnect prj ID and contract address to envs */
+  // Web3Modal configuration
+  const projectId = 'ec4d98af1f6158a2d8735beb3aadbe9a';
+  // Contract configuration
+  const CONTRACT_ADDRESS = "0x61DBb4f851EAdD3a30cb18724D0b70a1A794CE4C";
+  const CONTRACT_ABI = [
+    "function sendMessage(string calldata name, string calldata text) external",
+    "function getMessages(uint256 offset, uint256 limit) external view returns (tuple(address sender, string name, string text, uint256 timestamp)[])",
+    "function getMessageCount() external view returns (uint256)",
+    "function messages(uint256) external view returns (address sender, string name, string text, uint256 timestamp)",
+    "event MessageSent(address indexed sender, string name, string text, uint256 timestamp)"
+  ];
+
+  // Create Web3Modal instance
+	const polygon = {
+	chainId: 137,
+	name: 'Polygon',
+	currency: 'MATIC',
+	explorerUrl: 'https://polygonscan.com',
+	rpcUrl: 'https://polygon-rpc.com'
+	};
+
+  const metadata = {
+    name: 'UselessChat',
+    description: 'Eternal blockchain conversations',
+    url: window.location.origin,
+    icons: ['https://avatars.githubusercontent.com/u/37784886']
+  };
+
+  const ethersConfig = defaultConfig({
+    metadata,
+    enableEIP6963: true, // Enable browser wallet detection
+    enableInjected: true, // Enable injected wallets
+    enableCoinbase: true, // Enable Coinbase
+  	rpcUrl: 'https://polygon-rpc.com', // default RPC
+  	defaultChainId: 137 // Polygon chain ID
+  });
+
+  const modal = createWeb3Modal({
+    ethersConfig,
+    chains: [polygon],
+    projectId,
+    enableAnalytics: false,
+    themeMode: 'dark',
+    themeVariables: {
+      '--w3m-font-size-master': '11px',
+      '--w3m-accent': '#0a246a'
+    }
+  });
+
+  // Global app state
+  window.chatApp = {
+    provider: null,
+    signer: null,
+    contract: null,
+    userAddress: null,
+    isConnected: false,
+    modal: modal
+  };
+
+  // Utility functions
+  window.chatUtils = {
+    escapeHtml: (text) => {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    },
+    
+    formatAddress: (address) => {
+      return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    },
+    
+    formatTime: (timestamp) => {
+      const date = new Date(timestamp * 1000);
+      return date.toLocaleString();
+    }
+  };
+
+  // Contract functions
+  window.contractFunctions = {
+    async connectWallet() {
+      try {
+        await modal.open();
+        
+        // Wait for connection
+        const provider = await modal.getWalletProvider();
+        if (!provider) return false;
+
+        const ethersProvider = new ethers.BrowserProvider(provider);
+        const signer = await ethersProvider.getSigner();
+        const userAddress = await signer.getAddress();
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+        // Update global state
+        window.chatApp = {
+          ...window.chatApp,
+          provider: ethersProvider,
+          signer,
+          contract,
+          userAddress,
+          isConnected: true
+        };
+
+        // Dispatch custom event
+        window.dispatchEvent(new CustomEvent('walletConnected', {
+          detail: { userAddress }
+        }));
+
+        return true;
+      } catch (error) {
+        console.error('Connection failed:', error);
+        window.dispatchEvent(new CustomEvent('walletError', {
+          detail: { error: error.message }
+        }));
+        return false;
+      }
+    },
+
+	async disconnectWallet() {
+	try {
+		// 1. Close the Web3Modal UI if it’s open
+		if (modal.isOpen()) {
+		await modal.close();
+		}
+
+		// 2. Grab the provider instance
+		const provider = modal.getWalletProvider();
+		if (provider) {
+		// — If it’s a WalletConnect/EIP-1193 provider, kill its session
+		if (typeof provider.disconnect === 'function') {
+			await provider.disconnect();
+		} else if (typeof provider.close === 'function') {
+			await provider.close();
+		}
+
+		// — If it’s MetaMask (or other injected), explicitly revoke eth_accounts permissions 
+		if (typeof provider.request === 'function') {
+			await provider.request({
+			method: 'wallet_revokePermissions',
+			params: [{ eth_accounts: {} }]
+			});
+		}
+		}
+
+		// 3. Wipe any cached connector keys (so Web3Modal won’t auto-reconnect)
+		try {
+		localStorage.removeItem('walletconnect');
+		localStorage.removeItem('WEB3_CONNECT_CACHED_PROVIDER');
+		} catch { /* ignore if storage blocked */ }
+
+		// 4. Reset your app’s state
+		window.chatApp = {
+		...window.chatApp,
+		provider: null,
+		signer: null,
+		contract: null,
+		userAddress: null,
+		isConnected: false
+		};
+
+		// 5. Notify your UI
+		window.dispatchEvent(new CustomEvent('walletDisconnected'));
+	} catch (error) {
+		console.error('Disconnect failed:', error);
+	}
+	},
+
+
+
+    async sendMessage(name, message) {
+      if (!window.chatApp.isConnected) {
+        throw new Error('Wallet not connected');
+      }
+
+      try {
+        const tx = await window.chatApp.contract.sendMessage(name, message);
+        return await tx.wait();
+      } catch (error) {
+        console.error('Send message failed:', error);
+        throw error;
+      }
+    },
+
+    async loadMessages(limit = 50) {
+      if (!window.chatApp.contract) {
+        return [];
+      }
+
+      try {
+        // Get message count
+        const messageCount = await window.chatApp.contract.getMessageCount();
+        
+        if (messageCount === 0n) {
+          return [];
+        }
+        
+        // Get messages
+        const actualLimit = Math.min(Number(messageCount), limit);
+        const messages = await window.chatApp.contract.getMessages(0, actualLimit);
+        
+        return messages.map(msg => ({
+          sender: msg.sender,
+          name: msg.name,
+          text: msg.text,
+          timestamp: Number(msg.timestamp)
+        }));
+        
+      } catch (error) {
+        console.error('Load messages failed:', error);
+        return [];
+      }
+    }
+  };
+
+  // Listen for Web3Modal events
+  modal.subscribeProvider(({ address, isConnected, chainId }) => {
+    if (isConnected && address) {
+      // Re-establish connection when address changes
+      (async () => {
+        try {
+          const provider = await modal.getWalletProvider();
+          const ethersProvider = new ethers.BrowserProvider(provider);
+          const signer = await ethersProvider.getSigner();
+          const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+          window.chatApp = {
+            ...window.chatApp,
+            provider: ethersProvider,
+            signer,
+            contract,
+            userAddress: address,
+            isConnected: true
+          };
+
+          window.dispatchEvent(new CustomEvent('walletConnected', {
+            detail: { userAddress: address }
+          }));
+        } catch (error) {
+          console.error('Re-connection failed:', error);
+        }
+      })();
+    } else if (!isConnected) {
+      window.chatApp = {
+        ...window.chatApp,
+        provider: null,
+        signer: null,
+        contract: null,
+        userAddress: null,
+        isConnected: false
+      };
+      window.dispatchEvent(new CustomEvent('walletDisconnected'));
+    }
+  });
+
+  // Auto-connect on page load if previously connected
+  document.addEventListener('DOMContentLoaded', async () => {
+    // Web3Modal handles auto-connection internally
+    // The subscribeProvider will fire if there's an existing connection
+  });
+
+  console.log('Available modal methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(modal)));
+</script>

@@ -1,0 +1,140 @@
+---
+// src/components/MessageForm.astro
+---
+
+<div class="win98-sunken p-2 bg-gray-100">
+  <form id="message-form" class="space-y-2">
+    <!-- Name Input -->
+    <div class="flex items-center space-x-2">
+      <label class="text-xs font-normal text-black w-16">Nick:</label>
+      <input 
+        type="text" 
+        id="name-input"
+        placeholder="Enter nickname..."
+        maxlength="15"
+        class="win98-input flex-1 text-xs"
+        required
+      />
+      <div class="text-xs text-gray-600">
+        <span id="name-counter">0</span>/15
+      </div>
+    </div>
+
+    <!-- Message Input -->
+    <div class="flex items-start space-x-2">
+      <label class="text-xs font-normal text-black w-16 mt-1">Message:</label>
+      <div class="flex-1">
+        <textarea 
+          id="message-input"
+          placeholder="Type your message here..."
+          maxlength="180"
+          rows="2"
+          class="win98-input w-full text-xs resize-none"
+          required
+        ></textarea>
+        <div class="text-xs text-gray-600 mt-1">
+          <span id="message-counter">0</span>/180 characters
+        </div>
+      </div>
+    </div>
+
+    <!-- Send Button -->
+    <div class="flex justify-end space-x-2">
+      <button 
+        type="submit"
+        id="send-button"
+        disabled
+        class="win98-button text-xs"
+      >
+        <span id="button-text">Connect Wallet</span>
+      </button>
+      <button 
+        type="button"
+        class="win98-button text-xs"
+        onclick="document.getElementById('message-input').value = ''; document.getElementById('name-input').value = ''; document.getElementById('message-counter').textContent = '0'; document.getElementById('name-counter').textContent = '0';"
+      >
+        Clear
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+  const messageForm = document.getElementById('message-form');
+  const nameInput = document.getElementById('name-input');
+  const messageInput = document.getElementById('message-input');
+  const sendButton = document.getElementById('send-button');
+  const buttonText = document.getElementById('button-text');
+  const nameCounter = document.getElementById('name-counter');
+  const messageCounter = document.getElementById('message-counter');
+
+  // Character counters
+  nameInput?.addEventListener('input', () => {
+    nameCounter.textContent = nameInput.value.length;
+  });
+
+  messageInput?.addEventListener('input', () => {
+    messageCounter.textContent = messageInput.value.length;
+  });
+
+  // Form submission
+  messageForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    if (!window.chatApp?.isConnected) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    const name = nameInput.value.trim();
+    const message = messageInput.value.trim();
+    
+    if (!name || !message) {
+      alert('Please enter both nickname and message');
+      return;
+    }
+
+    try {
+      buttonText.textContent = 'Sending...';
+      sendButton.disabled = true;
+      
+      await window.contractFunctions.sendMessage(name, message);
+      
+      buttonText.textContent = 'Confirming...';
+      
+      // Clear form
+      nameInput.value = '';
+      messageInput.value = '';
+      nameCounter.textContent = '0';
+      messageCounter.textContent = '0';
+      
+      buttonText.textContent = 'Send';
+      sendButton.disabled = false;
+      
+      // Trigger message reload
+      window.dispatchEvent(new CustomEvent('messageSent'));
+      
+    } catch (error) {
+      console.error('Send failed:', error);
+      alert(`Failed to send message: ${error.message}`);
+      buttonText.textContent = 'Send';
+      sendButton.disabled = false;
+    }
+  });
+
+  // Enable form when wallet connects
+  window.addEventListener('walletConnected', () => {
+    sendButton.disabled = false;
+    buttonText.textContent = 'Send';
+  });
+
+  window.addEventListener('walletDisconnected', () => {
+    sendButton.disabled = true;
+    buttonText.textContent = 'Connect Wallet';
+  });
+
+  window.addEventListener('walletError', () => {
+    sendButton.disabled = true;
+    buttonText.textContent = 'Connect Wallet';
+  });
+</script>

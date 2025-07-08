@@ -1,0 +1,110 @@
+---
+// src/components/WalletConnect.astro
+---
+
+<div id="wallet-status" class="inline-flex items-center space-x-2">
+  <button 
+    id="connect-button"
+    class="win98-button text-xs"
+  >
+    Connect Wallet
+  </button>
+  <button 
+    id="disconnect-button"
+    class="win98-button text-xs hidden"
+  >
+    Disconnect
+  </button>
+  <div id="connection-info" class="text-xs hidden">
+    <span class="text-green-600">✅ <span id="user-address"></span></span>
+  </div>
+</div>
+
+<script>
+  const connectButton = document.getElementById('connect-button');
+  const disconnectButton = document.getElementById('disconnect-button');
+  const connectionInfo = document.getElementById('connection-info');
+  const userAddressSpan = document.getElementById('user-address');
+
+  // Handle wallet connection
+  connectButton?.addEventListener('click', async () => {
+    connectButton.textContent = 'Connecting...';
+    connectButton.disabled = true;
+
+    try {
+      const success = await window.contractFunctions.connectWallet();
+      
+      if (!success) {
+        connectButton.textContent = 'Connect Wallet';
+        connectButton.disabled = false;
+      }
+    } catch (error) {
+      connectButton.textContent = 'Connect Wallet';
+      connectButton.disabled = false;
+    }
+  });
+
+  // Handle wallet disconnection
+  disconnectButton?.addEventListener('click', async () => {
+    disconnectButton.textContent = 'Disconnecting...';
+    disconnectButton.disabled = true;
+    
+    try {
+      await window.contractFunctions.disconnectWallet();
+    } catch (error) {
+      console.error('Disconnect error:', error);
+      disconnectButton.textContent = 'Disconnect';
+      disconnectButton.disabled = false;
+    }
+  });
+
+  // Listen for wallet events
+  window.addEventListener('walletConnected', (event) => {
+    const { userAddress } = event.detail;
+    
+    connectButton.classList.add('hidden');
+    disconnectButton.classList.remove('hidden');
+    disconnectButton.textContent = 'Disconnect';
+    disconnectButton.disabled = false;
+    connectionInfo.classList.remove('hidden');
+    userAddressSpan.textContent = window.chatUtils.formatAddress(userAddress);
+    
+    // Trigger message loading
+    window.dispatchEvent(new CustomEvent('loadMessages'));
+  });
+
+  window.addEventListener('walletDisconnected', () => {
+    connectButton.classList.remove('hidden');
+    connectButton.textContent = 'Connect Wallet';
+    connectButton.disabled = false;
+    disconnectButton.classList.add('hidden');
+    connectionInfo.classList.add('hidden');
+    
+    // Clear chat log
+    const chatLog = document.getElementById('chat-log');
+    if (chatLog) {
+      chatLog.innerHTML = '<div class="text-center text-gray-500 py-8 text-xs"><div>Connect your wallet to load messages...</div></div>';
+    }
+  });
+
+  window.addEventListener('walletError', (event) => {
+    const { error } = event.detail;
+    console.error('Wallet error:', error);
+    
+    connectButton.textContent = 'Connect Wallet';
+    connectButton.disabled = false;
+  });
+
+  // Check if already connected on page load
+  window.addEventListener('DOMContentLoaded', () => {
+    // Wait a bit for the main script to initialize
+    setTimeout(() => {
+      if (window.chatApp?.isConnected && window.chatApp?.userAddress) {
+        connectButton.classList.add('hidden');
+        disconnectButton.classList.remove('hidden');
+        connectionInfo.classList.remove('hidden');
+        userAddressSpan.textContent = window.chatUtils.formatAddress(window.chatApp.userAddress);
+      }
+    }, 100);
+  });
+</script>

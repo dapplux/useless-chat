@@ -1,0 +1,67 @@
+---
+// src/components/ChatLog.astro
+---
+
+<div class="win98-sunken h-64 overflow-y-auto p-2 bg-white" id="chat-log">
+  <div class="text-center text-gray-500 py-8 text-xs">
+    <div>Connect your wallet to load messages...</div>
+  </div>
+</div>
+
+<script>
+  const chatLog = document.getElementById('chat-log');
+
+  async function loadAndDisplayMessages() {
+    try {
+      chatLog.innerHTML = '<div class="text-center text-gray-500 py-8 text-xs"><div>Loading messages...</div></div>';
+      
+      const messages = await window.contractFunctions.loadMessages(50);
+      displayMessages(messages);
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+      chatLog.innerHTML = '<div class="text-center text-red-500 py-8 text-xs">Failed to load messages</div>';
+    }
+  }
+
+  function displayMessages(messages) {
+    if (messages.length === 0) {
+      chatLog.innerHTML = '<div class="text-center text-gray-500 py-8 text-xs">No messages yet. Be the first to chat! 🌸</div>';
+      return;
+    }
+
+    const messagesHtml = messages.map(msg => {
+      const isCurrentUser = window.chatApp?.userAddress && 
+                           msg.sender.toLowerCase() === window.chatApp.userAddress.toLowerCase();
+      
+      return `
+        <div class="mb-2 text-xs">
+          <div class="text-gray-600 mb-1">
+            <span class="font-bold ${isCurrentUser ? 'text-blue-600' : 'text-red-600'}">${window.chatUtils.escapeHtml(msg.name)}</span>
+            <span class="text-gray-500 ml-2">[${window.chatUtils.formatTime(msg.timestamp)}]</span>
+            <span class="text-gray-400 ml-1">(${window.chatUtils.formatAddress(msg.sender)})</span>
+          </div>
+          <div class="pl-2 border-l-2 ${isCurrentUser ? 'border-blue-300' : 'border-gray-300'} text-black">
+            ${window.chatUtils.escapeHtml(msg.text)}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    chatLog.innerHTML = messagesHtml;
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  // Listen for events
+  window.addEventListener('loadMessages', loadAndDisplayMessages);
+  window.addEventListener('messageSent', loadAndDisplayMessages);
+
+  // Setup contract event listener when wallet connects
+  window.addEventListener('walletConnected', () => {
+    if (window.chatApp.contract) {
+      // Listen for new messages
+      window.chatApp.contract.on("MessageSent", (sender, name, text, timestamp) => {
+        loadAndDisplayMessages();
+      });
+    }
+  });
+</script>
